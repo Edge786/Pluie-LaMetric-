@@ -2,23 +2,44 @@ const express = require("express");
 const fetch = require("node-fetch");
 const app = express();
 
-const LAT = 48.7165344, LON = 1.8917064;
+// Coordonnées : Essarts-le-Roi
+const LAT = 48.7165344;
+const LON = 1.8917064;
 
 app.get("/", async (req, res) => {
   try {
-    const resp = await fetch("https://api.rainviewer.com/public/weather-maps.json");
-    const data = await resp.json();
-    const nowcast = data.radar.nowcast;
-    if (!nowcast?.length) {
-      return res.json({ frames: [{ text: "🌤 Pas de pluie", icon: "21903" }] });
+    const response = await fetch("https://api.rainviewer.com/public/weather-maps.json");
+    const data = await response.json();
+    const nowcast = data.radar?.nowcast;
+
+    if (!nowcast || nowcast.length === 0) {
+      return res.json({
+        frames: [{ text: "🌤 Pas de pluie à venir", icon: "21903" }]
+      });
     }
-    const now = Date.now()/1000;
-    const min = Math.ceil(Math.min(...nowcast.map(f => f.time - now))/60);
-    const text = `☔ Pluie dans ${isFinite(min) ? min : 0} min`;
-    res.json({ frames: [{ text, icon: "21903" }] });
-  } catch (e) {
-    res.json({ frames: [{ text: "⚠️ Erreur météo", icon: "21903" }] });
+
+    const now = Date.now() / 1000;
+    const nextFrame = nowcast.find(f => f.time > now);
+    const diffSec = nextFrame ? nextFrame.time - now : Infinity;
+    const minutes = Math.ceil(diffSec / 60);
+
+    const text = isFinite(minutes)
+      ? `☔ Pluie dans ${minutes} min`
+      : "🌤 Pas de pluie détectée";
+
+    return res.json({
+      frames: [{ text, icon: "21903" }]
+    });
+
+  } catch (error) {
+    console.error("Erreur météo :", error);
+    return res.json({
+      frames: [{ text: "⚠️ Erreur météo", icon: "21903" }]
+    });
   }
 });
 
-app.listen(process.env.PORT || 3000, () => console.log("✔️ Ready"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`✅ Serveur lancé sur le port ${PORT}`);
+});
