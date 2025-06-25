@@ -2,9 +2,10 @@ const express = require("express");
 const fetch = require("node-fetch");
 const app = express();
 
-// Coordonnées des Essarts-le-Roi
+// Coordonnées précises pour Les Essarts-le-Roi
 const LAT = 48.7165344;
 const LON = 1.8917064;
+const VILLE = "Essarts-le-Roi"; // Affiché uniquement
 const API_KEY = "d419ecba6a1003402286330e201e76b4";
 
 app.get("/", async (req, res) => {
@@ -15,39 +16,57 @@ app.get("/", async (req, res) => {
 
     if (!data.minutely || data.minutely.length === 0) {
       return res.json({
-        frames: [{ text: "⚠️ Aucune donnée minute", icon: "21903" }]
+        frames: [
+          { text: "🌥️ Données indisponibles", icon: "21903" },
+          { text: `📍 ${VILLE}`, icon: "21903" }
+        ]
       });
     }
 
-    // Cherche dans combien de minutes la pluie dépasse 0.1 mm/h
+    // Seuil de pluie significative (en mm/h)
+    const seuil = 0.2;
     let pluieDans = null;
+    let intensite = 0;
+
     for (let i = 0; i < data.minutely.length; i++) {
-      if (data.minutely[i].precipitation > 0.1) {
+      const mm = data.minutely[i].precipitation;
+      if (mm >= seuil) {
         pluieDans = i;
+        intensite = mm;
         break;
       }
     }
 
-    let text;
+    let message;
     if (pluieDans !== null) {
-      text = `☔ Pluie dans ${pluieDans} min`;
+      const intensitéTexte =
+        intensite < 1 ? "fine" :
+        intensite < 3 ? "modérée" :
+        "forte";
+      message = `☔ Pluie ${intensitéTexte} dans ${pluieDans} min`;
     } else {
-      text = "🌤 Pas de pluie dans l'heure";
+      message = "🌤 Pas de pluie significative";
     }
 
-    res.json({
-      frames: [{ text, icon: "21903" }]
+    return res.json({
+      frames: [
+        { text: message, icon: "21903" },
+        { text: `📍 ${VILLE}`, icon: "21903" }
+      ]
     });
 
-  } catch (e) {
-    console.error("Erreur OpenWeatherMap :", e);
-    res.json({
-      frames: [{ text: "❌ Erreur météo", icon: "21903" }]
+  } catch (error) {
+    console.error("❌ Erreur :", error.message);
+    return res.json({
+      frames: [
+        { text: "❌ Erreur météo", icon: "21903" },
+        { text: `📍 ${VILLE}`, icon: "21903" }
+      ]
     });
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🌍 Serveur actif sur port ${PORT}`);
+  console.log(`✅ Serveur météo actif sur le port ${PORT}`);
 });
