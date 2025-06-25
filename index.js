@@ -2,44 +2,52 @@ const express = require("express");
 const fetch = require("node-fetch");
 const app = express();
 
-// Coordonnées : Essarts-le-Roi
+// Coordonnées des Essarts-le-Roi
 const LAT = 48.7165344;
 const LON = 1.8917064;
+const API_KEY = "d419ecba6a1003402286330e201e76b4";
 
 app.get("/", async (req, res) => {
   try {
-    const response = await fetch("https://api.rainviewer.com/public/weather-maps.json");
+    const url = `https://api.openweathermap.org/data/3.0/onecall?lat=${LAT}&lon=${LON}&exclude=hourly,daily,current,alerts&appid=${API_KEY}&units=metric`;
+    const response = await fetch(url);
     const data = await response.json();
-    const nowcast = data.radar?.nowcast;
 
-    if (!nowcast || nowcast.length === 0) {
+    if (!data.minutely || data.minutely.length === 0) {
       return res.json({
-        frames: [{ text: "🌤 Pas de pluie à venir", icon: "21903" }]
+        frames: [{ text: "⚠️ Aucune donnée minute", icon: "21903" }]
       });
     }
 
-    const now = Date.now() / 1000;
-    const nextFrame = nowcast.find(f => f.time > now);
-    const diffSec = nextFrame ? nextFrame.time - now : Infinity;
-    const minutes = Math.ceil(diffSec / 60);
+    // Cherche dans combien de minutes la pluie dépasse 0.1 mm/h
+    let pluieDans = null;
+    for (let i = 0; i < data.minutely.length; i++) {
+      if (data.minutely[i].precipitation > 0.1) {
+        pluieDans = i;
+        break;
+      }
+    }
 
-    const text = isFinite(minutes)
-      ? `☔ Pluie dans ${minutes} min`
-      : "🌤 Pas de pluie détectée";
+    let text;
+    if (pluieDans !== null) {
+      text = `☔ Pluie dans ${pluieDans} min`;
+    } else {
+      text = "🌤 Pas de pluie dans l'heure";
+    }
 
-    return res.json({
+    res.json({
       frames: [{ text, icon: "21903" }]
     });
 
-  } catch (error) {
-    console.error("Erreur météo :", error);
-    return res.json({
-      frames: [{ text: "⚠️ Erreur météo", icon: "21903" }]
+  } catch (e) {
+    console.error("Erreur OpenWeatherMap :", e);
+    res.json({
+      frames: [{ text: "❌ Erreur météo", icon: "21903" }]
     });
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Serveur lancé sur le port ${PORT}`);
+  console.log(`🌍 Serveur actif sur port ${PORT}`);
 });
