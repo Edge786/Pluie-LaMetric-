@@ -2,10 +2,10 @@ const express = require("express");
 const fetch = require("node-fetch");
 const app = express();
 
-// Coordonnées précises pour Les Essarts-le-Roi
+// Coordonnées Essarts-le-Roi
 const LAT = 48.7165344;
 const LON = 1.8917064;
-const VILLE = "Essarts-le-Roi"; // Affiché uniquement
+const VILLE = "Essarts-le-Roi";
 const API_KEY = "d419ecba6a1003402286330e201e76b4";
 
 app.get("/", async (req, res) => {
@@ -17,46 +17,66 @@ app.get("/", async (req, res) => {
     if (!data.minutely || data.minutely.length === 0) {
       return res.json({
         frames: [
-          { text: "🌥️ Données indisponibles", icon: "21903" },
+          { text: "⚠️ Données indisponibles", icon: "21903" },
           { text: `📍 ${VILLE}`, icon: "21903" }
         ]
       });
     }
 
-    // Seuil de pluie significative (en mm/h)
-    const seuil = 0.2;
+    // Seuils personnalisés
+    const SEUIL_MIN_VISIBLE = 0.3; // mm/h – on ignore les micro-gouttes
+    const SEUIL_PLUIE_FORTE = 3.0;
+
     let pluieDans = null;
     let intensite = 0;
 
     for (let i = 0; i < data.minutely.length; i++) {
       const mm = data.minutely[i].precipitation;
-      if (mm >= seuil) {
+      if (mm >= SEUIL_MIN_VISIBLE) {
         pluieDans = i;
         intensite = mm;
         break;
       }
     }
 
-    let message;
+    let frames = [];
+
     if (pluieDans !== null) {
-      const intensitéTexte =
+      let niveau =
         intensite < 1 ? "fine" :
-        intensite < 3 ? "modérée" :
-        "forte";
-      message = `☔ Pluie ${intensitéTexte} dans ${pluieDans} min`;
+        intensite < SEUIL_PLUIE_FORTE ? "modérée" : "forte";
+
+      let icone =
+        intensite < 1 ? "21903" :
+        intensite < SEUIL_PLUIE_FORTE ? "21904" : "21905"; // codes d’icône LaMetric météo
+
+      frames.push({
+        text: `🌧 Pluie ${niveau} dans ${pluieDans} min`,
+        icon: icone
+      });
+
     } else {
-      message = "🌤 Pas de pluie significative";
+      // Si faible pluie détectée (< 0.3), on envoie un message différent
+      const goutte = data.minutely.find(m => m.precipitation > 0);
+      if (goutte) {
+        frames.push({
+          text: `💦 Micro-gouttes sans impact`,
+          icon: "21903"
+        });
+      } else {
+        frames.push({
+          text: "🌤 Ciel calme",
+          icon: "21903"
+        });
+      }
     }
 
-    return res.json({
-      frames: [
-        { text: message, icon: "21903" },
-        { text: `📍 ${VILLE}`, icon: "21903" }
-      ]
-    });
+    frames.push({ text: `📍 ${VILLE}`, icon: "21903" });
 
-  } catch (error) {
-    console.error("❌ Erreur :", error.message);
+    return res.json({ frames });
+
+  } catch (e) {
+    console.error("❌ Erreur météo :", e.message);
     return res.json({
       frames: [
         { text: "❌ Erreur météo", icon: "21903" },
@@ -67,6 +87,4 @@ app.get("/", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`✅ Serveur météo actif sur le port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`✅ Serveur météo prêt`));
